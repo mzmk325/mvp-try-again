@@ -285,13 +285,13 @@ input, textarea, [contenteditable="true"], [contenteditable=""] {
         </section>
 
         <!-- 选择餐次 -->
-        <section class="mb-6 overflow-x-auto scrollbar-hide">
-          <div class="flex space-x-2 pb-2 min-w-max">
-            <button id="breakfast-chip" class="px-5 py-2 rounded-xl text-sm font-medium bg-neutral-100 dark:bg-neutral-700 transition-transform-shadow touch-target">早餐</button>
-<button id="lunch-chip"     class="px-5 py-2 rounded-xl text-sm font-medium bg-neutral-100 dark:bg-neutral-700 transition-transform-shadow touch-target">午餐</button>
-<button id="dinner-chip"    class="px-5 py-2 rounded-xl text-sm font-medium bg-primary text-white transition-transform-shadow touch-target">晚餐</button>
-            <button id="night-snack-chip" class="px-5 py-2 rounded-xl text-sm font-medium bg-neutral-100 dark:bg-neutral-700 transition-transform-shadow touch-target opacity-50 hidden">夜宵</button>
-            <button id="snack-chip" class="px-5 py-2 rounded-xl text-sm font-medium bg-neutral-100 dark:bg-neutral-700 transition-transform-shadow touch-target opacity-50 hidden">加餐</button>
+        <section class="mb-6">
+          <div class="grid grid-cols-5 gap-2 justify-items-center">
+            <button id="breakfast-chip" class="w-full px-5 py-2 rounded-xl text-sm font-medium bg-neutral-100 dark:bg-neutral-700 transition-transform-shadow touch-target text-center">早餐</button>
+            <button id="lunch-chip"     class="w-full px-5 py-2 rounded-xl text-sm font-medium bg-neutral-100 dark:bg-neutral-700 transition-transform-shadow touch-target text-center">午餐</button>
+            <button id="dinner-chip"    class="w-full px-5 py-2 rounded-xl text-sm font-medium bg-primary text-white transition-transform-shadow touch-target text-center">晚餐</button>
+            <button id="night-snack-chip" class="w-full px-5 py-2 rounded-xl text-sm font-medium bg-neutral-100 dark:bg-neutral-700 transition-transform-shadow touch-target opacity-50 invisible pointer-events-none text-center">夜宵</button>
+            <button id="snack-chip" class="w-full px-5 py-2 rounded-xl text-sm font-medium bg-neutral-100 dark:bg-neutral-700 transition-transform-shadow touch-target opacity-50 invisible pointer-events-none text-center">加餐</button>
           </div>
         </section>
 
@@ -632,7 +632,7 @@ input, textarea, [contenteditable="true"], [contenteditable=""] {
     </div>
 
     <!-- Toast 容器（统一提示） -->
-    <div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-[7.2rem] z-50 px-4 py-2 bg-black/80 text-white text-sm rounded-full hidden"></div>
+    <div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-[7.2rem] z-50 px-4 py-2 bg-black/80 text-white text-sm rounded-full whitespace-nowrap hidden"></div>
 
     <!-- 历史餐详情弹层（用于查看/修改某餐） -->
     <div id="hist-meal-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-end sm:items-center justify-center">
@@ -962,6 +962,34 @@ function compressImage(file, maxSizeMB = 2) {
   });
 }
 
+// 头像压缩：将图片等比缩放到最长边不超过 256px，质量约 0.8，返回 base64
+function compressAvatarImage(file) {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      const maxDimension = 256;
+      if (width > height && width > maxDimension) {
+        height = (height * maxDimension) / width;
+        width = maxDimension;
+      } else if (height > maxDimension) {
+        width = (width * maxDimension) / height;
+        height = maxDimension;
+      }
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+      const data = canvas.toDataURL('image/jpeg', 0.8);
+      resolve(data);
+    };
+    const reader = new FileReader();
+    reader.onload = (e) => { img.src = e.target.result; };
+    reader.readAsDataURL(file);
+  });
+}
+
 // 监听图片选择：只走"图片通路"，并清空文字避免混入
 photoInput.addEventListener('change', async (e) => {
   const file = e.target.files && e.target.files[0];
@@ -1100,7 +1128,7 @@ function saveTodayOverride(){
 
      // 主题模式：auto | light | dark
 // - auto：按时间切（19:00–06:00 = dark）
-// - light/dark：手动固定（支持“临时到期自动恢复”）
+// - light/dark：手动固定（支持"临时到期自动恢复"）
 function computeShouldDark(d){
   const h = (d || new Date()).getHours();
   return (h >= 19 || h < 6);
@@ -1205,7 +1233,7 @@ function scheduleThemeTimer(){
   }, delay);
 }
 
-// 绑定按钮：点击 = 在 light/dark 之间切换并进入“手动至下个阈值”；长按 1.5s 恢复 auto
+// 绑定按钮：点击 = 在 light/dark 之间切换并进入"手动至下个阈值"；长按 1.5s 恢复 auto
 const themeToggle = document.getElementById('theme-toggle');
 let pressTimer = null;
 themeToggle.addEventListener('mousedown', ()=>{ pressTimer = setTimeout(()=> { setManualUntil(0); setThemeMode('auto'); showToast('已恢复自动模式'); }, 1500); });
@@ -1377,6 +1405,8 @@ function loadProfile(){
   document.getElementById('profile-name').textContent = p.name || '健康饮食者';
   document.getElementById('profile-basic').textContent = (p.gender||'') + (p.age?` ${p.age}岁`:'');
   document.getElementById('profile-body').textContent  = (p.height?`${p.height}cm`:'') + (p.weight?` / ${p.weight}kg`:'');
+  // 同步头像（若有）
+  try{ if (p.avatar){ const el=document.getElementById('profile-avatar'); if(el) el.src=p.avatar; } }catch{}
 }
 // 初次加载头像
 function loadAvatar(){
@@ -1388,19 +1418,21 @@ function loadAvatar(){
 }
 
 // 上传头像逻辑
-document.getElementById('avatar-upload').addEventListener('change', (e)=>{
+document.getElementById('avatar-upload').addEventListener('change', async (e)=>{
   const file = e.target.files?.[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const base64 = ev.target.result;
+  try{
+    const base64 = await compressAvatarImage(file);
     const profile = getProfile();
     profile.avatar = base64;
     setProfile(profile);
     const avatarEl = document.getElementById('profile-avatar');
     if (avatarEl) avatarEl.src = base64;
-  };
-  reader.readAsDataURL(file);
+    showToast('头像已更新');
+  }catch(err){
+    console.error('头像处理失败', err);
+    showToast('头像处理失败，请重试');
+  }
 });
 // 绑定按钮：返回/保存（两个子页）
 document.getElementById('settings-back-profile').onclick = ()=> switchTab('profile');
@@ -1534,7 +1566,7 @@ function syncGoalLabels(){
       const nightChip = document.getElementById('night-snack-chip');
       nightToggle.addEventListener('change', () => {
   const off = !nightToggle.checked;
-  nightChip.classList.toggle('hidden', off);
+  nightChip.classList.toggle('invisible', off);
   nightChip.classList.toggle('opacity-50', off);
   nightChip.classList.toggle('pointer-events-none', off);
   nightChip.disabled = off;
@@ -1545,7 +1577,7 @@ function syncGoalLabels(){
       const snackChip = document.getElementById('snack-chip');
       snackToggle.addEventListener('change', () => {
   const off = !snackToggle.checked;
-  snackChip.classList.toggle('hidden', off);
+  snackChip.classList.toggle('invisible', off);
   snackChip.classList.toggle('opacity-50', off);
   snackChip.classList.toggle('pointer-events-none', off);
   snackChip.disabled = off;
